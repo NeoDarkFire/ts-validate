@@ -13,20 +13,19 @@
     "declaration": true,
     "strict": true,
     "outDir": "./dist",
-    "baseUrl": "./src",
+    "baseUrl": ".",
     "paths": {
       "~/*": [
-        "./*"
+        "./src/*"
       ],
       "@/*": [
-        "./*"
+        "./test/*"
       ]
     },
     "types": [
       "@types/node"
     ]
   },
-  "include": [
-    "./src/**/*"
-  ]
+  "include": [ "./test/**/*" ],
+  "files": [ "src/index.ts" ]
 }
