@@ -1,5 +1,5 @@
 import test from 'ava'
-import { Validator, isString, convert, toInt } from '~/index'
+import { Validator, isString, convert, toInt, isNumber, isUndefined, union, AssertionFn } from '~/index'
 
 test('MongoDB ObjectID validator (string)', t => {
 	interface Mongo {
@@ -49,6 +49,36 @@ test('Complex conversion', t => {
 		]
 	})
 	t.like(TestValidator.validate({ bytes: 0xAABB }), {bytes: {MSB: 0xAA, LSB: 0xBB}})
+});
+test('Optional fields', t => {
+	interface Optional<T> {
+		value?: T
+	}
+	const OptionalValidator = new Validator<Optional<number>>({
+		value: [union(isUndefined, isNumber)]
+	})
+	t.is(OptionalValidator.match({ value: "4" }), false)
+	t.is(OptionalValidator.match({ value: 4 }), true)
+	t.is(OptionalValidator.match({ value: undefined }), true)
+});
+
+test('Recursive validation', t => {
+	interface List<T> {
+		head: T,
+		tail?: List<T>
+	}
+	let _ListValidator: Validator<List<number>>
+	function _isList<T = never>(x: unknown): x is List<T> {
+		return _ListValidator.matchOrFail(x);
+	}
+	_ListValidator = new Validator<List<number>>({
+		head: [isNumber],
+		tail: [union(isUndefined, _isList)]
+	})
+	const ListValidator = _ListValidator
+	t.is(ListValidator.match({ head: "4" }), false)
+	t.is(ListValidator.match({ head: 4 }), true)
+	t.is(ListValidator.match({ head: 4, tail: { head: 4} }), true)
 });
 
 test('Forbidden syntax that should never compile', t => {

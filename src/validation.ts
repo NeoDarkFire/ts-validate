@@ -103,13 +103,13 @@ function isConversion(n: unknown): n is Conversion<unknown> {
 
 type NoInfer<T> = [T][T extends any ? 0 : never];
 export type Conversion<T> = { isConversion: true, converted: T };
-export type AssertionFn<T> = (field: unknown | unknown[]) => field is T | never;
 export type ConversionFn<T> = (field: unknown | unknown[]) => Conversion<T> | never;
+export type AssertionFn<T> = (field: unknown | unknown[]) => field is T | never;
 type ValidationResult<T = boolean> = T | Promise<T> | never;
 type ValidationFn<T> = (field: T) => ValidationResult;
 export type Validations<T> = {
 	[K in keyof T]: [
-		ConversionFn<T[K]> | AssertionFn<T[K]>,
+		AssertionFn<T[K]> | ConversionFn<T[K]>,
 		...Array<ValidationFn<T[K]>>
 	]
 };
