@@ -99,8 +99,9 @@ function isConversion(n: unknown): n is Conversion<unknown> {
 }
 
 // -----------------------------------------------------------------------------
-// Validator types and functions
+// Validator types and helper functions
 
+type NoInfer<T> = [T][T extends any ? 0 : never];
 export type Conversion<T> = { isConversion: true, converted: T };
 export type AssertionFn<T> = (field: unknown | unknown[]) => field is T | never;
 export type ConversionFn<T> = (field: unknown | unknown[]) => Conversion<T> | never;
@@ -111,26 +112,9 @@ export type Validations<T> = {
 		ConversionFn<T[K]> | AssertionFn<T[K]>,
 		...Array<ValidationFn<T[K]>>
 	]
-	& Iterable<ValidationFn<T[K]> | ConversionFn<T[K]>>;
+	& Iterable<ValidationFn<T[K]> | ConversionFn<T[K]>>
 };
 type ToValidate = { [key: string]: unknown };
-export type Validator<T> = {
-	validations: Validations<T>;
-	validate(obj: unknown): T | never;
-	validateField<F extends keyof T>(field: F, obj: unknown): T[F] | never;
-	validateEvery(obj: unknown): T[] | never;
-	validateAsync(obj: unknown): Promise<T>;
-	validateFieldAsync<F extends keyof T>(field: F, obj: unknown): Promise<T[F]>;
-	validateEveryAsync(obj: unknown): Promise<T[]>;
-	match(obj: unknown): obj is T;
-	matchOrFail(obj: unknown): obj is T | never;
-	matchEvery(objs: unknown): objs is T[];
-	matchEveryOrFail(objs: unknown): objs is T[] | never;
-	matchAsync(obj: unknown): Promise<boolean>;
-	matchOrFailAsync(obj: unknown): Promise<boolean>;
-	matchEveryAsync(objs: unknown): Promise<boolean>;
-	matchEveryOrFailAsync(objs: unknown): Promise<boolean>;
-};
 
 /// Error class used for model validation.
 /// Capable of holding the invalid field's name
@@ -145,146 +129,6 @@ export class ValidationError extends Error {
 	static throw(msg: string, field?: string): never {
 		throw new ValidationError(msg, field);
 	}
-}
-
-// Same as validateAsync, but ignores Promises
-function _validate<T, Vs extends Validations<T>>
-		(obj: unknown, validations: Vs): T | never {
-	if (typeof(obj) !== 'object' || obj === null) {
-		ValidationError.throw('Not an object or null');
-	}
-	const errors: Error[] = [];
-	for (const field of _keys(validations)) {
-		try {
-			const converted = _validateFieldRaw<T, Vs, keyof T>(
-				field as keyof T, obj as ToValidate, validations);
-			if (converted !== undefined) (obj as any)[field] = converted;
-		} catch (err) {
-			_pushError(err, field as string, errors);
-		}
-	}
-	return _cast(obj, errors);
-}
-
-function _validateField<T, Vs extends Validations<T>, F extends keyof T>(
-	field: F,
-	obj: unknown,
-	validations: Vs
-) : T[F] | never {
-	if (typeof(obj) !== 'object' || obj === null) {
-		ValidationError.throw(`Field '${field}' is not an object or null`);
-	}
-	const errors: Error[] = [];
-	try {
-		const converted = _validateFieldRaw<T, Vs, F>(
-			field, obj as ToValidate, validations);
-		if (converted !== undefined) (obj as any)[field] = converted;
-	} catch (err) {
-		_pushError(err, field as string, errors);
-	}
-	return _cast<T>(obj, errors)[field];
-}
-
-function _validateFieldRaw<T, Vs extends Validations<T>, F extends keyof T>(
-	field: F,
-	obj: ToValidate,
-	validations: Vs
-) : T[F] | undefined | never {
-	const fns = validations[field];
-	let x = obj[field as string] as T[F];
-	let converted: T[F] | undefined;
-	for (const fn of fns) {
-		const res = (fn as ValidationFn<T[F]> | ConversionFn<T[F]>)(x as any);
-		if (res instanceof Promise || res === true) {
-			// Do nothing
-		} else if (isConversion(res)) {
-			x = res.converted;
-			converted = x
-		} else {
-			throw null;
-		}
-	}
-	return converted
-}
-
-function _validateEvery<T, Vs extends Validations<T>>
-		(objs: unknown, validations: Vs): T[] | never {
-	if (!Array.isArray(objs)) throw new TypeError('Must be an array');
-	return objs.map(obj => _validate(obj, validations)) as T[]
-}
-
-async function _validateAsync<T, Vs extends Validations<T>>
-		(obj: unknown, validations: Vs): Promise<T> {
-	if (typeof(obj) !== 'object' || obj === null) {
-		ValidationError.throw('Not an object or null');
-	}
-	const errors: ValidationError[] = [];
-	// Check the fields in parrallel, not sequentially (they're independant)
-	const promises = _keys(validations).map(async field => {
-		try {
-			const converted = await _validateFieldRawAsync<T, Vs, keyof T>(
-				field as keyof T, obj as ToValidate, validations);
-			if (converted !== undefined) (obj as any)[field] = converted;
-		} catch (err) {
-			_pushError(err, field as string, errors);
-		}
-	});
-	await Promise.all(promises);
-
-	return _cast(obj, errors);
-}
-
-async function _validateFieldAsync<T, Vs extends Validations<T>, F extends keyof T>(
-	field: F,
-	obj: unknown,
-	validations: Vs)
-: Promise<T[F]> {
-	if (typeof(obj) !== 'object' || obj === null) {
-		ValidationError.throw(`Field '${field}' is not an object or null`);
-	}
-	const errors: Error[] = [];
-	try {
-		const converted = await _validateFieldRawAsync<T, Vs, keyof T>(
-			field, obj as ToValidate, validations);
-		if (converted !== undefined) (obj as any)[field] = converted;
-	} catch (err) {
-		_pushError(err, field as string, errors);
-	}
-	return _cast<T>(obj, errors)[field];
-}
-
-async function _validateFieldRawAsync<
-	T, Vs extends Validations<T>, F extends keyof T
->(
-	field: F,
-	obj: ToValidate,
-	validations: Vs)
-: Promise<T[F] | undefined> {
-	const fns = validations[field];
-	let x = obj[field as string] as T[F];
-	let converted: T[F] | undefined;
-	// Check the fields sequentially to keep assertions in order
-	for (const fn of fns) {
-		let res = (fn as ValidationFn<any> | ConversionFn<any>)(x);
-		res = res instanceof Promise ? await res : res;
-		if (res === true) {
-			// Do nothing
-		} else if (isConversion(res)) {
-			x = res.converted;
-			converted = x;
-		} else {
-			throw null;
-		}
-	}
-	return converted
-}
-
-async function _validateEveryAsync<T, Vs extends Validations<T>>
-		(objs: unknown, validations: Vs): Promise<T[]> {
-	if (!Array.isArray(objs)) throw new TypeError('Must be an array');
-	return await Promise.all(
-		objs.map(async (obj) => await _validateAsync(obj, validations))
-	) as T[]
 }
 
 function _pushError<E extends Error>
@@ -334,25 +178,6 @@ function _cast<T>(obj: unknown, errors: Error[]): T | never {
 	}
 }
 
-function _match<T>(obj: unknown, validations: Validations<T>): obj is T {
-	try {
-		if (typeof(obj) !== 'object' || obj === null) return false;
-		else return !!_validate(obj, validations);
-	} catch {
-		return false;
-	}
-}
-
-async function _matchAsync<T>(obj: unknown, validations: Validations<T>)
-		: Promise<boolean> {
-	try {
-		if (typeof(obj) !== 'object' || obj === null) return false;
-		else return !!await _validate(obj, validations);
-	} catch {
-		return false;
-	}
-}
-
 type Action = (obj: unknown) => unknown;
 /// Call `fn` for each obj in `objs`, catching errors and throwing them
 /// all at the end (if any).
@@ -371,49 +196,193 @@ function _aggregateErrors(objs: unknown[], fn: Action): void | never {
 	}
 }
 
-export function makeValidator<T, Vs extends Validations<T>>(validations: Vs)
-		: Validator<T> {
-	return {
-		validations,
-		validate: obj => _validate(obj, validations),
-		validateField: (field, obj) => _validateField(field, obj, validations),
-		validateEvery: objs => _validateEvery(objs, validations),
-		validateAsync: obj => _validateAsync(obj, validations),
-		validateFieldAsync:
-			(field, obj) => _validateFieldAsync(field, obj, validations),
-		validateEveryAsync: objs => _validateEveryAsync(objs, validations),
-		match(obj: unknown): obj is T {
-			return _match(obj, validations);
-		},
-		matchOrFail(obj: unknown): obj is T | never {
-			_validate(obj as {}, validations);
-			return true;
-		},
-		matchEvery(objs: unknown[]): objs is T[] {
-			return objs.every(obj => _match(obj, validations));
-		},
-		matchEveryOrFail(objs: unknown[]): objs is T[] | never {
-			_aggregateErrors(objs, obj => _validate(obj, validations));
-			return true;
-		},
-		async matchAsync(obj: unknown): Promise<boolean> {
-			return await _matchAsync(obj, validations);
-		},
-		async matchOrFailAsync(obj: unknown): Promise<boolean> {
-			await _validateAsync(obj, validations);
-			return true;
-		},
-		async matchEveryAsync(objs: unknown[]): Promise<boolean> {
-			const promises = objs
-				.map(obj => _matchAsync(obj, validations));
-			const all = await Promise.all(promises);
-			return all.every(res => res === true);
-		},
-		async matchEveryOrFailAsync(objs: unknown[]): Promise<boolean> {
-			const promises = objs
-				.map(obj => _validateAsync(obj, validations));
-			await Promise.all(promises);
-			return true;
-		},
-	};
+// -----------------------------------------------------------------------------
+// The main class of this file
+
+/**
+ * Validator class.
+ *
+ * Uses a validation object to validate object of a desired type T.
+ */
+export class Validator<T = void> {
+	private readonly validations: Validations<T>;
+
+	/**
+	 * Construct a new Validator by specifying a type
+	 * along with the validation object for that type.
+	 */
+	constructor(validations: NoInfer<Validations<T>>) {
+		this.validations = validations;
+	}
+
+	// -------------------------------------------------------------------------
+	// Synchronous methods
+
+	// Same as validateAsync, but ignores Promises
+	validate(obj: unknown): T | never {
+		if (typeof(obj) !== 'object' || obj === null) {
+			ValidationError.throw('Not an object or null');
+		}
+		const errors: Error[] = [];
+		for (const field of _keys(this.validations)) {
+			try {
+				const converted = this._validateFieldRaw(field as keyof T, obj as ToValidate);
+				if (converted !== undefined) (obj as any)[field] = converted;
+			} catch (err) {
+				_pushError(err, field as string, errors);
+			}
+		}
+		return _cast(obj, errors);
+	}
+
+	validateField<F extends keyof T>(field: F, obj: unknown) : T[F] | never {
+		if (typeof(obj) !== 'object' || obj === null) {
+			ValidationError.throw(`Field '${field}' is not an object or null`);
+		}
+		const errors: Error[] = [];
+		try {
+			const converted = this._validateFieldRaw(field, obj as ToValidate);
+			if (converted !== undefined) (obj as any)[field] = converted;
+		} catch (err) {
+			_pushError(err, field as string, errors);
+		}
+		return _cast<T>(obj, errors)[field];
+	}
+
+	_validateFieldRaw<F extends keyof T>(field: F, obj: ToValidate) : T[F] | undefined | never {
+		const fns = this.validations[field];
+		let x = obj[field as string] as T[F];
+		let converted: T[F] | undefined;
+		for (const fn of fns) {
+			const res = (fn as ValidationFn<T[F]> | ConversionFn<T[F]>)(x as any);
+			if (res instanceof Promise || res === true) {
+				// Do nothing
+			} else if (isConversion(res)) {
+				x = res.converted;
+				converted = x
+			} else {
+				throw null;
+			}
+		}
+		return converted
+	}
+
+	validateEvery(objs: unknown): T[] | never {
+		if (!Array.isArray(objs)) throw new TypeError('Must be an array');
+		return objs.map(obj => this.validate(obj)) as T[]
+	}
+
+	match(obj: unknown): obj is T {
+		try {
+			if (typeof(obj) !== 'object' || obj === null) return false;
+			else return !!this.validate(obj);
+		} catch {
+			return false;
+		}
+	}
+
+	matchOrFail(obj: unknown): obj is T | never {
+		this.validate(obj as {});
+		return true;
+	}
+
+	matchEvery(objs: unknown[]): objs is T[] {
+		return objs.every(obj => this.match(obj));
+	}
+
+	matchEveryOrFail(objs: unknown[]): objs is T[] | never {
+		_aggregateErrors(objs, obj => this.validate(obj));
+		return true;
+	}
+
+	// -------------------------------------------------------------------------
+	// Asynchronous methods
+
+	async validateAsync(obj: unknown): Promise<T> {
+		if (typeof(obj) !== 'object' || obj === null) {
+			ValidationError.throw('Not an object or null');
+		}
+		const errors: ValidationError[] = [];
+		// Check the fields in parrallel, not sequentially (they're independant)
+		const promises = _keys(this.validations).map(async field => {
+			try {
+				const converted = await this._validateFieldRawAsync(
+					field as keyof T, obj as ToValidate);
+				if (converted !== undefined) (obj as any)[field] = converted;
+			} catch (err) {
+				_pushError(err, field as string, errors);
+			}
+		});
+		await Promise.all(promises);
+
+		return _cast(obj, errors);
+	}
+
+	async validateFieldAsync<F extends keyof T>(field: F, obj: unknown) : Promise<T[F]> {
+		if (typeof(obj) !== 'object' || obj === null) {
+			ValidationError.throw(`Field '${field}' is not an object or null`);
+		}
+		const errors: Error[] = [];
+		try {
+			const converted = await this._validateFieldRawAsync(
+				field, obj as ToValidate);
+				if (converted !== undefined) (obj as any)[field] = converted;
+		} catch (err) {
+			_pushError(err, field as string, errors);
+		}
+		return _cast<T>(obj, errors)[field];
+	}
+
+	async _validateFieldRawAsync<F extends keyof T>(field: F, obj: ToValidate) : Promise<T[F] | undefined> {
+		const fns = this.validations[field];
+		let x = obj[field as string] as T[F];
+		let converted: T[F] | undefined;
+		// Check the fields sequentially to keep assertions in order
+		for (const fn of fns) {
+			let res = (fn as ValidationFn<any> | ConversionFn<any>)(x);
+			res = res instanceof Promise ? await res : res;
+			if (res === true) {
+				// Do nothing
+			} else if (isConversion(res)) {
+				x = res.converted;
+				converted = x;
+			} else {
+				throw null;
+			}
+		}
+		return converted
+	}
+
+	async validateEveryAsync(objs: unknown): Promise<T[]> {
+		if (!Array.isArray(objs)) throw new TypeError('Must be an array');
+		return await Promise.all(
+			objs.map(async (obj) => await this.validateAsync(obj))
+		) as T[]
+	}
+
+	async matchAsync(obj: unknown) : Promise<boolean> {
+		try {
+			if (typeof(obj) !== 'object' || obj === null) return false;
+			else return !!await this.validateAsync(obj);
+		} catch {
+			return false;
+		}
+	}
+
+	async matchOrFailAsync(obj: unknown): Promise<boolean> {
+		await this.validateAsync(obj);
+		return true;
+	}
+
+	async matchEveryAsync(objs: unknown[]): Promise<boolean> {
+		const promises = objs.map(obj => this.matchAsync(obj));
+		const all = await Promise.all(promises);
+		return all.every(res => res === true);
+	}
+
+	async matchEveryOrFailAsync(objs: unknown[]): Promise<boolean> {
+		const promises = objs.map(obj => this.validateAsync(obj));
+		await Promise.all(promises);
+		return true;
+	}
 }

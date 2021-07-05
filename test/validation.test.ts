@@ -1,11 +1,11 @@
 import test from 'ava'
-import { Validator, makeValidator, isString, convert, toInt } from '~/index'
+import { Validator, isString, convert, toInt } from '~/index'
 
 test('MongoDB ObjectID validator (string)', t => {
 	interface Mongo {
 		_id: string
 	}
-	const MongoValidator: Validator<Mongo> = makeValidator({
+	const MongoValidator = new Validator<Mongo>({
 		_id: [
 			isString,
 			(x: string) => x.match(/^[0-9a-f]{24}$/i) !== null,
@@ -23,7 +23,7 @@ test('SQL numeric ID validator', t => {
 	interface SqlEntity {
 		id: number
 	}
-	const SqlValidator: Validator<SqlEntity> = makeValidator({
+	const SqlValidator = new Validator<SqlEntity>({
 		id: [convert(toInt), (x: number) => x > 0]
 	})
 	t.is(SqlValidator.match({ id: 0 }), false)
@@ -36,7 +36,7 @@ test('Complex conversion', t => {
 	interface Test {
 		bytes: { MSB: number, LSB: number }
 	}
-	const TestValidator: Validator<Test> = makeValidator({
+	const TestValidator = new Validator<Test>({
 		bytes: [
 			convert((x) => {
 				const int = toInt(x)
@@ -48,4 +48,12 @@ test('Complex conversion', t => {
 		]
 	})
 	t.like(TestValidator.validate({ bytes: 0xAABB }), {bytes: {MSB: 0xAA, LSB: 0xBB}})
+});
+
+test('Forbidden syntax that should never compile', t => {
+	() => {
+		// @ts-expect-error - the type must always be specified
+		new Validator({})
+	}
+	t.pass()
 });
