@@ -112,7 +112,6 @@ export type Validations<T> = {
 		ConversionFn<T[K]> | AssertionFn<T[K]>,
 		...Array<ValidationFn<T[K]>>
 	]
-	& Iterable<ValidationFn<T[K]> | ConversionFn<T[K]>>
 };
 type ToValidate = { [key: string]: unknown };
 

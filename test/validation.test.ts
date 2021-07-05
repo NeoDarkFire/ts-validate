@@ -8,7 +8,7 @@ test('MongoDB ObjectID validator (string)', t => {
 	const MongoValidator = new Validator<Mongo>({
 		_id: [
 			isString,
-			(x: string) => x.match(/^[0-9a-f]{24}$/i) !== null,
+			x => x.match(/^[0-9a-f]{24}$/i) !== null,
 		]
 	})
 	t.is(MongoValidator.match({ _id: 'abcdefghijklmnopqrstuvwx' }), false)
@@ -24,7 +24,8 @@ test('SQL numeric ID validator', t => {
 		id: number
 	}
 	const SqlValidator = new Validator<SqlEntity>({
-		id: [convert(toInt), (x: number) => x > 0]
+		// id: [convert(toInt), (x: number) => x > 0]
+		id: [convert(toInt), x => x > 0]
 	})
 	t.is(SqlValidator.match({ id: 0 }), false)
 	t.is(SqlValidator.match({ id: 1.5 }), true)
