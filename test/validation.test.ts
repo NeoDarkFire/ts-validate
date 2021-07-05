@@ -1,34 +1,51 @@
 import test from 'ava'
 import { Validator, makeValidator, isString, convert, toInt } from '~/index'
 
-test('simple validator with conditions', t => {
+test('MongoDB ObjectID validator (string)', t => {
 	interface Mongo {
 		_id: string
 	}
 	const MongoValidator: Validator<Mongo> = makeValidator({
 		_id: [
 			isString,
-			(x: string) => x.length === 24,
-			(x: string) => Number.parseInt(x, 16).toString(16) === x,
+			(x: string) => x.match(/^[0-9a-f]{24}$/i) !== null,
 		]
 	})
-	// TODO: why does this fail
-	// t.is(MongoValidator.match({ _id: 'abcdefghijklmnopqrstuvwx' }), false)
-	// t.is(MongoValidator.match({ _id: '0123456789abcdef012345' }), false)
+	t.is(MongoValidator.match({ _id: 'abcdefghijklmnopqrstuvwx' }), false)
+	t.is(MongoValidator.match({ _id: '0123456789abcdef' }), false)
 	t.is(MongoValidator.match({ _id: 0x0123456789abcdef01234567 }), false)
+	t.is(MongoValidator.match({ _id: '0123456789abcdef0123456789ab' }), false)
 	t.is(MongoValidator.match({ _id: '0123456789abcdef01234567' }), true)
+	t.is(MongoValidator.match({ _id: '0123456789ABCDEF01234567' }), true)
 });
 
-test('simple validator with conversion', t => {
+test('SQL numeric ID validator', t => {
 	interface SqlEntity {
 		id: number
 	}
 	const SqlValidator: Validator<SqlEntity> = makeValidator({
 		id: [convert(toInt), (x: number) => x > 0]
 	})
-	// TODO: why does this fail
-	// t.is(SqlValidator.match({ id: 0 }), false)
+	t.is(SqlValidator.match({ id: 0 }), false)
 	t.is(SqlValidator.match({ id: 1.5 }), true)
 	t.is(SqlValidator.match({ id: "4" }), true)
 	t.is(SqlValidator.match({ id: "abc" }), false)
+});
+
+test('Complex conversion', t => {
+	interface Test {
+		bytes: { MSB: number, LSB: number }
+	}
+	const TestValidator: Validator<Test> = makeValidator({
+		bytes: [
+			convert((x) => {
+				const int = toInt(x)
+				return {
+					MSB: (int >> 8) & 0xFF,
+					LSB: int & 0xFF
+				}
+			}),
+		]
+	})
+	t.like(TestValidator.validate({ bytes: 0xAABB }), {bytes: {MSB: 0xAA, LSB: 0xBB}})
 });

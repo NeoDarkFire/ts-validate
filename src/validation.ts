@@ -191,17 +191,20 @@ function _validateFieldRaw<T, Vs extends Validations<T>, F extends keyof T>(
 	validations: Vs
 ) : T[F] | undefined | never {
 	const fns = validations[field];
+	let x = obj[field as string] as T[F];
+	let converted: T[F] | undefined;
 	for (const fn of fns) {
-		const x = obj[field as string]
 		const res = (fn as ValidationFn<T[F]> | ConversionFn<T[F]>)(x as any);
 		if (res instanceof Promise || res === true) {
-			return undefined;
+			// Do nothing
 		} else if (isConversion(res)) {
-			return res.converted;
+			x = res.converted;
+			converted = x
 		} else {
 			throw null;
 		}
 	}
+	return converted
 }
 
 function _validateEvery<T, Vs extends Validations<T>>
@@ -258,19 +261,22 @@ async function _validateFieldRawAsync<
 	validations: Vs)
 : Promise<T[F] | undefined> {
 	const fns = validations[field];
+	let x = obj[field as string] as T[F];
+	let converted: T[F] | undefined;
 	// Check the fields sequentially to keep assertions in order
 	for (const fn of fns) {
-		const x = obj[field as string]
 		let res = (fn as ValidationFn<any> | ConversionFn<any>)(x);
 		res = res instanceof Promise ? await res : res;
 		if (res === true) {
-			return undefined;
+			// Do nothing
 		} else if (isConversion(res)) {
-			return res.converted;
+			x = res.converted;
+			converted = x;
 		} else {
 			throw null;
 		}
 	}
+	return converted
 }
 
 async function _validateEveryAsync<T, Vs extends Validations<T>>
