@@ -78,6 +78,7 @@ test('Recursive validation', t => {
 	const ListValidator = _ListValidator
 	t.is(ListValidator.match({ head: "4" }), false)
 	t.is(ListValidator.match({ head: 4 }), true)
+	t.is(ListValidator.match({ head: 4, tail: { head: "4"} }), false)
 	t.is(ListValidator.match({ head: 4, tail: { head: 4} }), true)
 });
 
