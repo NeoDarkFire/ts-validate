@@ -4,9 +4,12 @@
   "description": "Typescript interface validation and automatic conversion library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["/dist"],
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "lint": "eslint --ext \".ts\" --ignore-path .gitignore .",
     "test": "ava"
   },
   "author": "NeoDarkFire (https://github.com/NeoDarkFire)",
@@ -14,7 +17,13 @@
   "repository": "github:NeoDarkFire/ts-validate",
   "devDependencies": {
     "@types/node": "^15.12.4",
+    "@typescript-eslint/eslint-plugin": "^4.28.2",
+    "@typescript-eslint/parser": "^4.28.2",
     "ava": "^3.15.0",
+    "eslint": "^7.30.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^3.4.0",
+    "prettier": "^2.3.2",
     "ts-node": "^10.0.0",
     "tsconfig-paths": "^3.9.0",
     "typescript": "^4.3.5"

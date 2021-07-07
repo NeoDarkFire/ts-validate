@@ -26,6 +26,6 @@
       "@types/node"
     ]
   },
-  "include": [ "./test/**/*" ],
+  "include": [ "./test/**/*", "./src/**/*" ],
   "files": [ "src/index.ts" ]
 }

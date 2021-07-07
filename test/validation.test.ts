@@ -1,91 +1,96 @@
 import test from 'ava'
-import { Validator, isString, convert, toInt, isNumber, isUndefined, union } from '~/index'
+import {
+  Validator,
+  isString,
+  convert,
+  toInt,
+  isNumber,
+  isUndefined,
+  union,
+} from '~/index'
 
-test('MongoDB ObjectID validator (string)', t => {
-	interface Mongo {
-		_id: string
-	}
-	const MongoValidator = new Validator<Mongo>({
-		_id: [
-			isString,
-			x => x.match(/^[0-9a-f]{24}$/i) !== null,
-		]
-	})
-	t.is(MongoValidator.match({ _id: 'abcdefghijklmnopqrstuvwx' }), false)
-	t.is(MongoValidator.match({ _id: '0123456789abcdef' }), false)
-	t.is(MongoValidator.match({ _id: 0x0123456789abcdef01234567 }), false)
-	t.is(MongoValidator.match({ _id: '0123456789abcdef0123456789ab' }), false)
-	t.is(MongoValidator.match({ _id: '0123456789abcdef01234567' }), true)
-	t.is(MongoValidator.match({ _id: '0123456789ABCDEF01234567' }), true)
-});
+test('MongoDB ObjectID validator (string)', (t) => {
+  interface Mongo {
+    _id: string
+  }
+  const MongoValidator = new Validator<Mongo>({
+    _id: [isString, (x) => x.match(/^[0-9a-f]{24}$/i) !== null],
+  })
+  t.is(MongoValidator.match({ _id: 'abcdefghijklmnopqrstuvwx' }), false)
+  t.is(MongoValidator.match({ _id: '0123456789abcdef' }), false)
+  t.is(MongoValidator.match({ _id: 0x0123456789abcdef01234567 }), false)
+  t.is(MongoValidator.match({ _id: '0123456789abcdef0123456789ab' }), false)
+  t.is(MongoValidator.match({ _id: '0123456789abcdef01234567' }), true)
+  t.is(MongoValidator.match({ _id: '0123456789ABCDEF01234567' }), true)
+})
 
-test('SQL numeric ID validator', t => {
-	interface SqlEntity {
-		id: number
-	}
-	const SqlValidator = new Validator<SqlEntity>({
-		// id: [convert(toInt), (x: number) => x > 0]
-		id: [convert(toInt), x => x > 0]
-	})
-	t.is(SqlValidator.match({ id: 0 }), false)
-	t.is(SqlValidator.match({ id: 1.5 }), true)
-	t.is(SqlValidator.match({ id: "4" }), true)
-	t.is(SqlValidator.match({ id: "abc" }), false)
-});
+test('SQL numeric ID validator', (t) => {
+  interface SqlEntity {
+    id: number
+  }
+  const SqlValidator = new Validator<SqlEntity>({
+    // id: [convert(toInt), (x: number) => x > 0]
+    id: [convert(toInt), (x) => x > 0],
+  })
+  t.is(SqlValidator.match({ id: 0 }), false)
+  t.is(SqlValidator.match({ id: 1.5 }), true)
+  t.is(SqlValidator.match({ id: '4' }), true)
+  t.is(SqlValidator.match({ id: 'abc' }), false)
+})
 
-test('Complex conversion', t => {
-	interface Test {
-		bytes: { MSB: number, LSB: number }
-	}
-	const TestValidator = new Validator<Test>({
-		bytes: [
-			convert((x) => {
-				const int = toInt(x)
-				return {
-					MSB: (int >> 8) & 0xFF,
-					LSB: int & 0xFF
-				}
-			}),
-		]
-	})
-	t.like(TestValidator.validate({ bytes: 0xAABB }), {bytes: {MSB: 0xAA, LSB: 0xBB}})
-});
-test('Optional fields', t => {
-	interface Optional<T> {
-		value?: T
-	}
-	const OptionalValidator = new Validator<Optional<number>>({
-		value: [union(isUndefined, isNumber)]
-	})
-	t.is(OptionalValidator.match({ value: "4" }), false)
-	t.is(OptionalValidator.match({ value: 4 }), true)
-	t.is(OptionalValidator.match({ value: undefined }), true)
-});
+test('Complex conversion', (t) => {
+  interface Test {
+    bytes: { MSB: number; LSB: number }
+  }
+  const TestValidator = new Validator<Test>({
+    bytes: [
+      convert((x) => {
+        const int = toInt(x)
+        return {
+          MSB: (int >> 8) & 0xff,
+          LSB: int & 0xff,
+        }
+      }),
+    ],
+  })
+  t.like(TestValidator.validate({ bytes: 0xaabb }), {
+    bytes: { MSB: 0xaa, LSB: 0xbb },
+  })
+})
+test('Optional fields', (t) => {
+  interface Optional<T> {
+    value?: T
+  }
+  const OptionalValidator = new Validator<Optional<number>>({
+    value: [union(isUndefined, isNumber)],
+  })
+  t.is(OptionalValidator.match({ value: '4' }), false)
+  t.is(OptionalValidator.match({ value: 4 }), true)
+  t.is(OptionalValidator.match({ value: undefined }), true)
+})
 
-test('Recursive validation', t => {
-	interface List<T> {
-		head: T,
-		tail?: List<T>
-	}
-	let _ListValidator: Validator<List<number>>
-	function _isList<T = never>(x: unknown): x is List<T> {
-		return _ListValidator.matchOrFail(x);
-	}
-	_ListValidator = new Validator<List<number>>({
-		head: [isNumber],
-		tail: [union(isUndefined, _isList)]
-	})
-	const ListValidator = _ListValidator
-	t.is(ListValidator.match({ head: "4" }), false)
-	t.is(ListValidator.match({ head: 4 }), true)
-	t.is(ListValidator.match({ head: 4, tail: { head: "4"} }), false)
-	t.is(ListValidator.match({ head: 4, tail: { head: 4} }), true)
-});
+test('Recursive validation', (t) => {
+  interface List<T> {
+    head: T
+    tail?: List<T>
+  }
+  const ListValidator = new Validator<List<number>>({
+    head: [isNumber],
+    tail: [union(isUndefined, _isList)],
+  })
+  function _isList<T = never>(x: unknown): x is List<T> {
+    return ListValidator.matchOrFail(x)
+  }
+  t.is(ListValidator.match({ head: '4' }), false)
+  t.is(ListValidator.match({ head: 4 }), true)
+  t.is(ListValidator.match({ head: 4, tail: { head: '4' } }), false)
+  t.is(ListValidator.match({ head: 4, tail: { head: 4 } }), true)
+})
 
-test('Forbidden syntax that should never compile', t => {
-	() => {
-		// @ts-expect-error - the type must always be specified
-		new Validator({})
-	}
-	t.pass()
-});
+test('Forbidden syntax that should never compile', (t) => {
+  ;() => {
+    // @ts-expect-error - the type must always be specified
+    new Validator({})
+  }
+  t.pass()
+})
