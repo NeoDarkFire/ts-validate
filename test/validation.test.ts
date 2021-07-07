@@ -1,5 +1,5 @@
 import test from 'ava'
-import { Validator, isString, convert, toInt, isNumber, isUndefined, union, AssertionFn } from '~/index'
+import { Validator, isString, convert, toInt, isNumber, isUndefined, union } from '~/index'
 
 test('MongoDB ObjectID validator (string)', t => {
 	interface Mongo {
