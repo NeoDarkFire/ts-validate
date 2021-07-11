@@ -8,6 +8,7 @@ import {
   isUndefined,
   union,
 } from '~/index'
+import { ListValidator } from '@/list'
 
 test('MongoDB ObjectID validator (string)', (t) => {
   interface Mongo {
@@ -70,21 +71,34 @@ test('Optional fields', (t) => {
 })
 
 test('Recursive validation', (t) => {
-  interface List<T> {
-    head: T
-    tail?: List<T>
-  }
-  const ListValidator = new Validator<List<number>>({
-    head: [isNumber],
-    tail: [union(isUndefined, _isList)],
-  })
-  function _isList<T = never>(x: unknown): x is List<T> {
-    return ListValidator.matchOrFail(x)
-  }
   t.is(ListValidator.match({ head: '4' }), false)
   t.is(ListValidator.match({ head: 4 }), true)
   t.is(ListValidator.match({ head: 4, tail: { head: '4' } }), false)
   t.is(ListValidator.match({ head: 4, tail: { head: 4 } }), true)
+})
+
+test('Error messages', (t) => {
+  const err = t.throws(() =>
+    ListValidator.validate({
+      head: '1',
+      tail: { head: '2', tail: { head: '3', tail: null } },
+    })
+  )
+  if (err instanceof AggregateError) {
+    const header = 'Multiple errors occured'
+    // Should only have one header
+    const match = err.message.match(new RegExp(`${header}`, 'g'))
+    t.is(match?.length ?? 0, 1)
+    // Should show all errors
+    t.regex(err.message, /"head": 1/)
+    t.regex(err.message, /"tail.head": 2/)
+    t.regex(err.message, /"tail.tail.head": 3/)
+    t.regex(err.message, /"tail.tail.tail": null \(Unexpected null\)/)
+    // Should not show more errors
+    t.is(err.message.match(/\n/g)?.length ?? 0, 4)
+  } else {
+    t.fail('The error should be an AggregateError')
+  }
 })
 
 test('Forbidden syntax that should never compile', (t) => {
